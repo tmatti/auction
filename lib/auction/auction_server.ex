@@ -1,8 +1,6 @@
 defmodule AuctionServer do
   use GenServer
 
-  # Client API
-
   def start_link({auction_id, initial_bid}) do
     GenServer.start_link(__MODULE__, {auction_id, initial_bid},
       name: {:via, Registry, {Auction.Registry, auction_id}}
@@ -46,20 +44,19 @@ defmodule AuctionServer do
     end
   end
 
-  # Server Callbacks
-
   def init({auction_id, initial_bid}) do
     Registry.register(Auction.Registry, auction_id, nil)
 
     state = %{
       auction_id: auction_id,
-      current_bid: initial_bid,
+      bids: [],
+      current_bid: 0,
       current_bidder: nil,
+      next_bid: initial_bid,
+      status: :pending,
       start_time: nil,
       end_time: nil,
-      bids: [],
-      timer_ref: nil,
-      status: :pending
+      timer_ref: nil
     }
 
     {:ok, state}
@@ -86,25 +83,23 @@ defmodule AuctionServer do
   end
 
   def handle_call({:place_bid, {bid, user}}, _from, state) do
-    next_minimum_bid = calculate_next_minimum_bid(state.current_bid)
+    if bid >= state.next_bid do
+      updated_bids = [{user, bid} | state.bids]
+      next_minimum_bid = Auction.Bid.calculate_next_minimum_bid(bid)
 
-    new_state =
-      if bid >= state.current_bid + next_minimum_bid do
-        new_bid = bid
-        updated_bids = [{user, new_bid} | state.bids]
-
-        %{
-          state
-          | current_bid: new_bid,
-            current_bidder: user,
-            bids: updated_bids
-        }
-      else
+      new_state = %{
         state
-      end
+        | bids: updated_bids,
+          current_bid: bid,
+          current_bidder: user,
+          next_bid: next_minimum_bid
+      }
 
-    broadcast(:new_bid, new_state)
-    {:reply, {:ok, new_state}, new_state}
+      broadcast(:new_bid, new_state)
+      {:reply, {:ok, new_state}, new_state}
+    else
+      {:reply, {:error, :invalid_bid}, state}
+    end
   end
 
   def handle_call(:get_state, _from, state) do
@@ -114,19 +109,11 @@ defmodule AuctionServer do
   def handle_info(:end_auction, state) do
     updated_state = %{
       state
-      | status: :complete
+      | status: :completed
     }
 
     broadcast(:auction_ended, updated_state)
     {:noreply, updated_state}
-  end
-
-  # Helper Functions
-
-  defp calculate_next_minimum_bid(_current_bid) do
-    # :math.pow(10, trunc(:math.log10(current_bid)))
-    # |> trunc()
-    0
   end
 
   defp broadcast(event, state) do

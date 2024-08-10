@@ -34,6 +34,10 @@ defmodule AuctionWeb.AuctionLive do
     end
   end
 
+  def handle_event("home", _params, socket) do
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
   def handle_info({:new_bid, auction}, socket) do
     {:noreply, assign(socket, auction: auction)}
   end
@@ -54,7 +58,7 @@ defmodule AuctionWeb.AuctionLive do
       <div class="flex flex-col w-full max-w-md gap-4 p-6 bg-white rounded-lg shadow-lg">
         <h2 class="text-xl font-semibold text-gray-800">User: <%= @user %></h2>
         <h2 class="text-xl font-semibold text-gray-800">Auction: <%= @auction.auction_id %></h2>
-        <%= if @auction.status in [:active, :complete] do %>
+        <%= if @auction.status in [:active, :completed] do %>
           <ul>
             <li class="text-gray-800 text-md">Start: <%= @auction.start_time %></li>
             <li class="text-gray-800 text-md">End: <%= @auction.end_time %></li>
@@ -63,12 +67,22 @@ defmodule AuctionWeb.AuctionLive do
           <h2 class="text-xl font-semibold text-gray-800">
             <%= case @auction.status do
               :active -> "Current Bid: "
-              :complete -> "Winning Bid: "
+              :completed -> "Winning Bid: "
             end %> $<%= @auction.current_bid %> by <%= @auction.current_bidder %>
           </h2>
         <% end %>
 
         <div class="flex items-center space-x-4">
+          <%= if @auction.status == :pending do %>
+            <form phx-submit="start_auction" class="flex flex-col items-start gap-2">
+              <button
+                type="submit"
+                class="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
+              >
+                Start Auction
+              </button>
+            </form>
+          <% end %>
           <%= if @auction.status == :active do %>
             <form phx-submit="place_bid" class="flex flex-col items-start gap-2">
               <input type="hidden" name="auction" value={@auction.auction_id} />
@@ -79,8 +93,8 @@ defmodule AuctionWeb.AuctionLive do
                   type="number"
                   id="bid"
                   name="bid"
-                  min={@auction.current_bid + 1}
-                  value={@auction.current_bid + 1}
+                  value={@auction.next_bid}
+                  #
                   class="p-2 border border-gray-300 rounded-md"
                 />
               </div>
@@ -93,15 +107,12 @@ defmodule AuctionWeb.AuctionLive do
             </form>
           <% end %>
           <%= if @auction.status == :completed do %>
-            <a href="/">Home</a>
-          <% end %>
-          <%= if @auction.status == :pending do %>
-            <form phx-submit="start_auction" class="flex flex-col items-start gap-2">
+            <form phx-submit="home">
               <button
                 type="submit"
-                class="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
+                class="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
               >
-                Start Auction
+                Home
               </button>
             </form>
           <% end %>
