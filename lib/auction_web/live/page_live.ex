@@ -1,7 +1,7 @@
 defmodule AuctionWeb.PageLive do
   use AuctionWeb, :live_view
 
-  alias AuctionWeb.Router.Helpers, as: Routes
+  # alias AuctionWeb.Router.Helpers, as: Routes
 
   def mount(_params, _session, socket) do
     {:ok, assign(socket, name: "", auction: "")}
@@ -19,13 +19,30 @@ defmodule AuctionWeb.PageLive do
         <form phx-submit="join_auction" class="flex flex-col items-center gap-4">
           <div class="flex flex-col items-start w-full">
             <label for="name" class="mb-1 text-gray-700">Your Name:</label>
-            <input type="text" id="name" name="name" value={@name} required class="w-full p-2 border border-gray-300 rounded-md" />
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={@name}
+              required
+              class="w-full p-2 border border-gray-300 rounded-md"
+            />
           </div>
           <div class="flex flex-col items-start w-full">
             <label for="auction" class="mb-1 text-gray-700">Auction ID:</label>
-            <input type="text" id="auction" name="auction" value={@auction} required class="w-full p-2 border border-gray-300 rounded-md" />
+            <input
+              type="text"
+              id="auction"
+              name="auction"
+              value={@auction}
+              required
+              class="w-full p-2 border border-gray-300 rounded-md"
+            />
           </div>
-          <button type="submit" class="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700">
+          <button
+            type="submit"
+            class="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
+          >
             Join Auction
           </button>
         </form>

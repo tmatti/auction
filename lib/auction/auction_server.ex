@@ -9,7 +9,7 @@ defmodule AuctionServer do
     )
   end
 
-  def start_auction(auction_id, initial_bid \\ 1) do
+  def get_or_create_auction(auction_id, initial_bid \\ 1) do
     case Registry.lookup(Auction.Registry, auction_id) do
       [{pid, _value}] ->
         {:ok, pid}
@@ -22,9 +22,16 @@ defmodule AuctionServer do
     end
   end
 
+  def start_auction(auction_id) do
+    case Registry.lookup(Auction.Registry, auction_id) do
+      [{pid, _value}] -> GenServer.call(pid, :start_auction)
+      _ -> {:error, :auction_not_found}
+    end
+  end
+
   def place_bid(auction_id, {bid, user}) do
     case Registry.lookup(Auction.Registry, auction_id) do
-      [{pid, value}] ->
+      [{pid, _value}] ->
         GenServer.call(pid, {:place_bid, {bid, user}})
 
       [] ->
@@ -51,13 +58,17 @@ defmodule AuctionServer do
       start_time: nil,
       end_time: nil,
       bids: [],
-      timer_ref: nil
+      timer_ref: nil,
+      status: :pending
     }
 
     {:ok, state}
   end
 
-  def handle_call(:start_auction, _from, state) do
+  def handle_call(:start_auction, _from, %{start_time: %DateTime{}}),
+    do: {:error, :auction_already_started}
+
+  def handle_call(:start_auction, _from, %{start_time: nil} = state) do
     start_time = DateTime.utc_now()
     end_time = DateTime.add(start_time, 30, :second)
     timer_ref = Process.send_after(self(), :end_auction, 30_000)
@@ -66,18 +77,19 @@ defmodule AuctionServer do
       state
       | start_time: start_time,
         end_time: end_time,
-        timer_ref: timer_ref
+        timer_ref: timer_ref,
+        status: :active
     }
 
     broadcast(:auction_started, new_state)
-    {:reply, :ok, new_state}
+    {:reply, {:ok, new_state}, new_state}
   end
 
   def handle_call({:place_bid, {bid, user}}, _from, state) do
     next_minimum_bid = calculate_next_minimum_bid(state.current_bid)
 
     new_state =
-      if bid >= ( state.current_bid + next_minimum_bid) do
+      if bid >= state.current_bid + next_minimum_bid do
         new_bid = bid
         updated_bids = [{user, new_bid} | state.bids]
 
@@ -92,7 +104,7 @@ defmodule AuctionServer do
       end
 
     broadcast(:new_bid, new_state)
-    {:reply, :ok, new_state}
+    {:reply, {:ok, new_state}, new_state}
   end
 
   def handle_call(:get_state, _from, state) do
@@ -100,13 +112,18 @@ defmodule AuctionServer do
   end
 
   def handle_info(:end_auction, state) do
-    broadcast(:auction_ended, state)
-    {:stop, :normal, state}
+    updated_state = %{
+      state
+      | status: :complete
+    }
+
+    broadcast(:auction_ended, updated_state)
+    {:noreply, updated_state}
   end
 
   # Helper Functions
 
-  defp calculate_next_minimum_bid(current_bid) do
+  defp calculate_next_minimum_bid(_current_bid) do
     # :math.pow(10, trunc(:math.log10(current_bid)))
     # |> trunc()
     0
